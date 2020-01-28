@@ -3,11 +3,13 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Sudoku.Sudoku where
 import Data.Array.Unboxed
 import Data.Array.ST
 import Data.Function (fix)
+import Data.List (splitAt)
 import qualified  Data.Set as Set
 import Data.STRef
 
@@ -170,6 +172,13 @@ solve g rand
                 return sltn
     | otherwise = Nothing
 
+chunksOf :: forall a. Int -> [a] -> [[a]]
+chunksOf n xs = f xs where
+    f []  = []
+    f xs' = let
+        (h, t) = splitAt n xs'
+        in h : f t
+
 main :: IO ()
 main = do
     let arr = listArray ((1,1), (9, 9)) test :: UArray (Int, Int) Int
@@ -177,7 +186,9 @@ main = do
     rand' <- newStdGen
     let u = shuffle' (f sudokuSz) rand'
     let arr' = arr // ((take 51 . fst $ u) `zip` repeat 0)
-    print $ solve arr' rand
+    case solve arr rand of
+        Nothing -> putStrLn "no solution found"
+        Just x  -> putStrLn . unlines $ map show $ chunksOf sudokuSz $ elems $ arr // x
     where
         f n = (,) <$> [1 .. n] <*> [1 .. n]
 
@@ -196,12 +207,12 @@ main = do
 -- colum (easy). filter by block... hard
 
 test :: [Int]
-test = [ 7, 2, 6, 4, 9, 3, 8, 1, 5
-       , 3, 1, 5, 7, 2, 8, 9, 4, 6
-       , 4, 8, 9, 6, 5, 1, 2, 3, 7
-       , 8, 5, 2, 1, 4, 7, 6, 9, 3
-       , 6, 7, 3, 9, 8, 5, 1, 2, 4
-       , 9, 4, 1, 3, 6, 2, 7, 5, 8
-       , 1, 9, 4, 8, 3, 6, 5, 7, 2
-       , 5, 6, 7, 2, 1, 4, 3, 8, 9
-       , 2, 3, 8, 5, 7, 9, 4, 6, 1 ]
+test = [ 0,0,0,0,6,0,0,0,0,
+         0,2,0,9,0,4,0,6,0,
+         4,0,0,0,7,0,0,0,9,
+         0,3,0,0,0,0,0,9,2,
+         0,0,9,0,8,0,5,0,0,
+         1,0,0,0,0,0,0,3,0,
+         5,0,0,0,0,0,0,0,1,
+         0,9,0,2,0,6,0,4,0,
+         0,0,0,0,5,0,0,0,0 ]
