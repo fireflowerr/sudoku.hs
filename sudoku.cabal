@@ -13,18 +13,48 @@ author:              paroxayte
 maintainer:          36929366+paroxayte@users.noreply.github.com
 -- copyright:
 category:            Game
-extra-source-files:  CHANGELOG.md
+data-files:          ui/ui.glade
+                   , ui/gui.css
 
-executable sudoku
-  main-is:             Sudoku/Sudoku.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base ^>=4.12.0.0,
+common deps
+  build-depends:       base ^>= 4.12,
                        array,
+                       random,
                        containers,
-                       random
+                       sudoku-internal
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall
+                       -fno-warn-unused-do-bind
+
+library
+  import:              deps
+  exposed-modules:     Sudoku.Sudoku
+  other-modules:       Sudoku.Internal
+
+library sudoku-internal
+  exposed-modules:     Sudoku.Internal
+  build-depends:       base ^>= 4.12,
+                       array,
+                       random,
+                       containers
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
+executable app
+  import:              deps
+  main-is:             Sudoku/Gui.hs
+  other-modules:       Sudoku.Sudoku,
+                       Sudoku.Internal,
+                       Paths_sudoku
+  -- other-extensions:
+  build-depends:       gi-gtk ^>= 3.0.32,
+                       haskell-gi ^>= 0.23.0,
+                       haskell-gi-base ^>= 0.23.0,
+                       text
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -main-is Sudoku.Gui
                        -O2
-                       -main-is Sudoku.Sudoku
+                       -threaded
