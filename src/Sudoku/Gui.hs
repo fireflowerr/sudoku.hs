@@ -9,51 +9,72 @@
 module Sudoku.Gui where
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (catch)
-import Control.Monad (forM_, forM)
-import Data.Array.Unboxed
+import Control.Monad (forM_, when)
 import Data.GI.Base
 import Data.GI.Base.GError (gerrorMessage, GError(..))
-import Data.IORef
 import Data.Maybe (fromJust)
-import GI.Gtk hiding (main, init)
+import GI.Gtk.Enums
+import GI.Gtk.Objects.Box
+import GI.Gtk.Objects.Builder
+import GI.Gtk.Objects.Button
+import GI.Gtk.Objects.Image
+import GI.Gtk.Objects.CssProvider
+import GI.Gtk.Objects.Grid
+import GI.Gtk.Objects.Overlay
+import GI.Gtk.Objects.Popover
+import GI.Gtk.Objects.StyleContext
+import GI.Gtk.Objects.Window
+import GI.Pango.Objects.FontMap
+import GI.Pango.Structs.FontDescription
 import Paths_sudoku
-import Sudoku.Sudoku
-import System.Random
-import qualified Data.Text as T (unpack, Text, pack, empty)
-import qualified GI.Gtk as Gtk (main, init)
+import Sudoku.Internal.Bindings
+import Sudoku.Internal.Bridge
+import Data.IORef
+import Sudoku.Internal.Sudoku
+import qualified Data.Text as T
+import qualified GI.Gtk.Functions as Gtk (main, init, mainQuit)
 
-data Env = Env { difficulty :: Int
-               , winWidth   :: Int
-               , winHeight  :: Int
-               , pulseDuration :: Int }
+-- DEFS ------------------------------------------------------------------------
+
+data Env = Env { lastCell   :: IORef Button
+               , pulse      :: Int }
+
+data App = App { keypad      :: Popover
+               , board       :: Grid
+               , window      :: Window }
+
+data Color = Red | Green -- colors must be supported in CSS
+
+type Font = (FontMap, FontDescription)
 
 cssPath :: T.Text
 cssPath = "ui/gui.css"
 
 uiPath :: T.Text
-uiPath = "ui/ui.glade"
+uiPath = "ui/app.ui"
 
-dfltEnv :: Env
-dfltEnv = Env 50 635 540 350000
+fontPath :: T.Text
+fontPath = "ui/sudokuicons.ttf"
 
--- | view coordinate space as list
-cSpace :: [(Int, Int)]
-cSpace = flip (,) <$> [1..sudokuSz] <*> [1..sudokuSz]
+logoPath :: T.Text
+logoPath = "ui/sudoku.png"
 
-buildWindow :: Int -> Int -> IO Window
-buildWindow (fromIntegral -> w) (fromIntegral -> h) = do
-    win <- new Window [#title := "sudokuhs", #resizable := True]
-    on win #destroy mainQuit
-    #resize win w h
-    return win
+dfltEnv :: IO Env
+dfltEnv = do
+    lc <- newIORef undefined :: IO (IORef Button)
+    return $ Env lc 350000
 
+-- Helper Funcs ----------------------------------------------------------------
+
+-- | Applies app.ui to app window
 applyCss :: Window -> IO ()
 applyCss win = do
     screen <- windowGetScreen win
     css <- cssProviderNew
-    cssProviderLoadFromPath css . T.pack =<< getDataFileName "ui/gui.css"
+    cssProviderLoadFromPath css . T.pack =<< getDataFileName (T.unpack cssPath)
     styleContextAddProviderForScreen screen css 600
 
+-- | Construct GObject type from builder
 unsafeBuildObj :: (GObject o)
     => (ManagedPtr o -> o)
     -> Builder
@@ -62,213 +83,222 @@ unsafeBuildObj :: (GObject o)
 unsafeBuildObj t builder wId = builderGetObject builder wId
     >>= unsafeCastTo t . fromJust
 
-buildOverlay :: IORef Int -> Grid -> IO Overlay
-buildOverlay difficulty' b = do
-    menuOverlay <- new Overlay [#expand := True]
-    menuBuilder <- builderNewFromFile . T.pack
-        =<< getDataFileName (T.unpack uiPath)
+-- | Add Sudoku.ttf to target button
+addBtnFont :: Font -> Button -> IO ()
+addBtnFont fnt btn = #createPangoContext btn >>= \x -> do
+    #loadFont (fst fnt) x $ snd fnt
+    return ()
 
-    menu <- builderGetObject menuBuilder "startMenu"
-        >>= unsafeCastTo Popover . fromJust
+-- | Map an action over each button in the Sudoku table, discarding the result
+traverseTable :: Grid ->  [Point] -> (Button -> IO ()) -> IO ()
+traverseTable g ps f = do
+    forM_ ps \(fromIntegral -> i, fromIntegral -> j) -> do
+        cell <- #getChildAt g j i >>= unsafeCastTo Button . fromJust
+        f cell
 
-    btns <- sequence $ [unsafeBuildObj Button menuBuilder] <*> [ "easy"
-                                                               , "normal"
-                                                               , "hard" ]
-    mapM_ noRelief btns
-    mapM_ (uncurry $ setLvl difficulty' menu) $ btns `zip` [30, 50, 70]
-    #addOverlay menuOverlay menu
-    return menuOverlay
+-- | Flash Color onto the cells in ps for pulse duration
+flashColor :: Int -> Grid -> [Point] -> Color -> IO ()
+flashColor pulse' g ps c = traverseTable g ps \x -> do
+    style <- #getStyleContext x
+    #addClass style $ sel c
+    forkIO $ threadDelay pulse' >> #removeClass style (sel c)
+    return ()
     where
-        setLvl ref (menu :: Popover) (btn :: Button) lvl = ( on btn #clicked
-            $  writeIORef ref lvl
-            >> randomFill ref b
-            >> #popdown menu )
-            >> return ()
-        noRelief (x :: Button) = set x [#relief := ReliefStyleNone]
+        sel = \case
+            Red -> "red"
+            Green -> "green"
 
-buildGrid :: IORef (Maybe Popover) -> IO Grid
-buildGrid cleanup = do
-    board <- new Grid [#expand := True
-                      , #name := "board"
-                      , #columnSpacing := 0
-                      , #rowSpacing := 0]
-    forM_ cSpace \(x, y) -> do
-        cell <- new Button [#expand := True, #relief := ReliefStyleNone]
-        lbl <- getLbl x y
+-- Build UI --------------------------------------------------------------------
+
+-- | Install Sudoku.ttf to current app isntance
+buildFont :: IO Font
+buildFont = do
+    pass <- currentAppFontAddFile =<< getDataFileName (T.unpack fontPath)
+    when (not pass) $ error "err adding font file"
+    fontMap <- carioFontMapGetDefault
+    fdesc <- fontDescriptionFromString "Sudoku"
+    return (fontMap, fdesc)
+
+-- | Constructs the Sudoku table
+buildBoard :: IORef Button -> Builder -> IO Grid
+buildBoard lcRef b = do
+    kp <- unsafeBuildObj Popover b "keypad"
+    board' <- unsafeBuildObj Grid b "board"
+    forM_ cSpace \(i, j) -> do
+        cellT <- getLbl i j
+        cell <- new Button [ #expand := True
+                           , #relief := ReliefStyleNone
+                           , #name   := "cell" ]
+        on cell #clicked $ do
+            writeIORef lcRef cell
+            style <- #getStyleContext cell
+            #addClass style "selected"
+            cellBtn kp cell
         style <- #getStyleContext cell
-        #addClass style "normal"
-        set cell [#name := lbl]
-
-        kpBuilder <- builderNewFromFile . T.pack
-            =<< getDataFileName (T.unpack uiPath)
-
-        pad <- unsafeBuildObj Popover kpBuilder "keypad"
-        kpGrid <- unsafeBuildObj Grid kpBuilder "kpGrid"
-        #getChildren kpGrid >>= \xs -> forM_ xs \x' -> do
-            btn <- unsafeCastTo Button x'
-            set btn [#relief := ReliefStyleNone]
-
-        set pad [#relativeTo := cell, #modal := False]
-        on cell #clicked $ switchPopup pad cleanup
-        wirePad pad cleanup
-        #attach board cell (fromIntegral x) (fromIntegral y) 1 1
-    return board
+        #addClass style cellT
+        #attach board' cell (fromIntegral i) (fromIntegral j) 1 1
+    return board'
         where
             getLbl x y = let
                 i = getBlock (y, x)
                 in if odd $ i
-                    then return "oddBlockCell"
-                    else return "evenBlockCell"
+                    then return "oddCell"
+                    else return "evenCell"
 
-buildControl
-    :: Box
-    -> Grid
-    -> IORef (Maybe Popover)
-    -> IORef Int
-    -> Int
-    -> IO Box
-buildControl box board cleanup difficulty' len = do
-    ctrlBox <- new Box [#expand := False
-                       , #orientation := OrientationHorizontal
-                       , #spacing := 2]
-    #add box ctrlBox
+buildOverlayLayout :: Grid -> Builder -> IO ()
+buildOverlayLayout g b = do
+    overlay <- unsafeBuildObj Overlay b "init_overlay"
+    diffBox <- unsafeBuildObj Box b "popup_menu"
+    #addOverlay overlay diffBox
+    difficultyBtns b g
+    #show overlay
 
-    clrBtn <- newBtn "clear" $writeState board (cSpace `zip` repeat 0)
-    redoBtn <- newBtn "new game" $ randomFill difficulty' board
-    solveBtn <- newBtn "solve" $ do
-        st <- gameState board
-        let arr = listArray ((1,1), (sudokuSz, sudokuSz)) st :: Board
-        rand <- newStdGen
-        case solve arr rand of
-            Nothing -> flashColor len board "red"
-            Just [] -> flashColor len board "green"
-            Just x  -> writeState board (head x) >> flashColor len board "green"
+buildLogo :: Builder -> IO ()
+buildLogo b = do
+    logo <- unsafeBuildObj Image b "logo"
+    logoPath' <- getDataFileName $ T.unpack logoPath
+    set logo [#file := T.pack logoPath']
 
-    #add ctrlBox redoBtn
-    #add ctrlBox clrBtn
-    #add ctrlBox solveBtn
-    return ctrlBox
-    where
-        newBtn lbl q = do
-            btn <- new Button [#expand := True
-                                 , #label := lbl
-                                 , #relief := ReliefStyleNone]
-            on btn #clicked $ q >> clearPopup cleanup
-            return btn
+buildCtrlLayout :: Int -> Grid -> Builder -> IO ()
+buildCtrlLayout pulse' g b = do
+    newGame_ <- unsafeBuildObj Button b "new_game_btn"
+    check_ <- unsafeBuildObj Button b "check_btn"
+    solve_ <- unsafeBuildObj Button b "solve_btn"
+    on newGame_ #clicked $ newGameBtn b
+    on solve_ #clicked $ solveBtn pulse' g
+    on check_ #clicked $ checkBtn pulse' g
+    return ()
 
-buildUI :: Env -> IO Window
-buildUI env = do
-    win <- buildWindow (winWidth env) (winHeight env)
-    applyCss win
-    lastPad <- newIORef Nothing
-    board <- buildGrid lastPad
-    difficulty' <- newIORef (difficulty env)
-    menuOverlay <- buildOverlay difficulty' board
-    #add win menuOverlay
+buildKeypad :: IORef Button -> Int -> Grid -> Builder -> IO Popover
+buildKeypad lcRef pulse' g b = do
+    kp <- unsafeBuildObj Popover b "keypad"
+    win <- unsafeBuildObj Window b "main"
+    let prefix = "kp_"
+    forM_ [1..sudokuSz] \x -> do
+        btn <- unsafeBuildObj Button b . T.pack $ prefix <> show x
+        on btn #clicked $ kpDigitBtn kp x
+    checkBtn' <- unsafeBuildObj Button b "kp_check"
+    clearBtn <- unsafeBuildObj Button b "kp_clear"
+    cheatBtn <- unsafeBuildObj Button b "kp_cheat"
+    on checkBtn' #clicked $ kpCheckBtn pulse' kp g
+    on clearBtn #clicked $ kpClearBtn kp
+    on cheatBtn #clicked $ kpCheatBtn pulse' kp g
+    on kp #closed $ forkIO do
+            lc <- readIORef lcRef
+            style <- #getStyleContext lc
+            #removeClass style "selected"
+            threadDelay pulse'
+            #setFocus win (Nothing :: Maybe Button)
+        >> return ()
+    return kp
 
-    box <- new Box [#expand := True -- top level layout
-                   , #orientation := OrientationVertical
-                   , #spacing := 5 ]
-    #add menuOverlay box
-    #add box board
-
-    ctrlBox <- buildControl box board lastPad difficulty' (pulseDuration env)
-    #add box ctrlBox
+buildWindow :: Builder -> IO Window
+buildWindow b = do
+    win <- unsafeBuildObj Window b "main"
+    on win #destroy Gtk.mainQuit
     return win
 
-clearPopup :: IORef (Maybe Popover) -> IO ()
-clearPopup x' = do
-    readIORef x' >>= \case
-        Nothing -> return ()
-        Just v  -> #popdown v
+buildApp :: Env -> IO App
+buildApp e = do
+    builder <- builderNewFromFile . T.pack
+        =<< getDataFileName (T.unpack uiPath)
+    board' <- buildBoard (lastCell e) builder
+    buildOverlayLayout board' builder
+    buildLogo builder
+    buildCtrlLayout (pulse e) board' builder
+    buildFont
+    kp <- buildKeypad (lastCell e) (pulse e) board' builder
+    win <- buildWindow builder
+    applyCss win
+    return $ App kp board' win
 
-switchPopup :: Popover -> IORef (Maybe Popover) -> IO ()
-switchPopup p x' = do
-    readIORef x' >>= \case
-        Nothing -> writeIORef x' (Just p) >> #popup p
-        Just x | x == p -> #popdown x >> writeIORef x' Nothing
-               | otherwise -> do
-                    #popdown x
-                    writeIORef x' $ Just p
-                    #popup p
+-- Button Controls -------------------------------------------------------------
 
--- | Solves a blank grid and then removes cells with n - probability
-randomFill :: IORef Int -> Grid -> IO ()
-randomFill pRef s = do
-    p <- readIORef pRef
-    rand <- newStdGen
-    case head <$> solve clr rand of
-        Nothing -> randomFill pRef s
-        Just xs | p >= maxProb -> writeState s xs
-                | otherwise -> do
-            g <- forM xs \x -> randomRIO (1, maxProb) >>= \p' ->
-                if p' > p
-                    then return x
-                    else return (fst x, 0)
-            writeState s g
-    return ()
-    where
-        clr = listArray ((1,1), (sudokuSz,sudokuSz)) $ repeat 0 :: Board
-        maxProb = 100
+cellBtn :: Popover -> Button -> IO ()
+cellBtn kp btn = do
+    #setRelativeTo kp $ Just btn
+    #popup kp
 
--- Set handlers for keypad and its children
-wirePad :: Popover -> IORef (Maybe Popover) -> IO ()
-wirePad b p = do
-    parent <- #getRelativeTo b
-    parent' <- unsafeCastTo Button parent
-    grid <- head <$> #getChildren b >>= unsafeCastTo Grid
-    children <- #getChildren grid
-    forM_ children \x -> do
-        x' <- unsafeCastTo Button x
-        on x' #clicked do
-            #getLabel x' >>= \v -> if v == "clr"
-                then set parent' [#label := T.empty]
-                else set parent' [#label := v]
-            clearPopup p
+kpDigitBtn :: Popover -> Int -> IO ()
+kpDigitBtn p v = do
+    parent <- #getRelativeTo p >>= unsafeCastTo Button
+    set parent [ #label := T.pack . show $ v ]
+    #popdown p
+
+kpCheckBtn :: Int -> Popover -> Grid -> IO ()
+kpCheckBtn pulse' p g = do
+    cell <- keypadCell g p
+    gridConflicts g cell >>= \case
+        [] -> flashColor pulse' g [(fst cell)] Green
+        xs -> flashColor pulse' g xs Red
+    #popdown p
     return ()
 
--- | Get state from grid to be used with Sudoku.Sudoku.solve
-gameState :: Grid -> IO [Int]
-gameState g = reverse <$> do
-    children <- #getChildren g
-    forM children \x -> do
-        x' <- unsafeCastTo Button x
-        #getLabel x' >>= \v -> if v == T.empty
-            then return 0
-            else return . read . T.unpack $ v
+kpClearBtn :: Popover -> IO ()
+kpClearBtn p = do
+    parent <- #getRelativeTo p >>= unsafeCastTo Button
+    set parent [#label := T.empty]
+    #popdown p
 
--- | Write xs onto g
-writeState :: Grid -> [((Int, Int), Int)] -> IO ()
-writeState g xs = forM_ xs \((fromIntegral -> x, fromIntegral -> y),v) -> do
-    cell <- gridGetChildAt g y x >>= unsafeCastTo Button . fromJust
-    set cell [#label := T.pack . f $ v]
+kpCheatBtn :: Int -> Popover -> Grid -> IO ()
+kpCheatBtn pulse' p g = do
+    kpClearBtn p
+    sltn <- gridSolve g
+    cord <-fst <$> keypadCell g p
+    case sltn of
+        Nothing -> flashColor pulse' g cSpace Red
+        Just x -> case lookup cord x of
+            Nothing -> flashColor pulse' g [cord] Green
+            Just x' -> gridUpdate g [(cord, x')]
+                >> flashColor pulse' g [cord] Green
+    #popdown p
+
+solveBtn :: Int ->  Grid -> IO ()
+solveBtn pulse' g = gridSolve g >>= \case
+    Nothing -> flashColor pulse' g cSpace Red
+    Just [] -> flashColor pulse' g cSpace Green
+    Just xs -> gridUpdate g xs >> flashColor pulse' g cSpace Green
+
+checkBtn :: Int -> Grid -> IO ()
+checkBtn pulse' g = do
+    board' <- gridArray g
+    case allConflicts board' of
+        [] -> flashColor pulse' g cSpace Green
+        xs -> flashColor pulse' g xs Red
+
+difficultyBtns :: Builder -> Grid -> IO ()
+difficultyBtns b g = do
+    menuBox <- unsafeBuildObj Box b "popup_menu"
+    easyBtn <- unsafeBuildObj Button b "easy_btn"
+    normalBtn <- unsafeBuildObj Button b "normal_btn"
+    hardBtn <- unsafeBuildObj Button b "hard_btn"
+    on easyBtn #clicked do
+        #hide menuBox
+        gridRegen g 30
+    on normalBtn #clicked do
+        #hide menuBox
+        gridRegen g 50
+    on hardBtn #clicked do
+        #hide menuBox
+        gridRegen g 70
     return ()
-    where
-        f 0 = []
-        f x = show x
 
--- | Flash a supported colover over the sudoku table for len microseconds
-flashColor :: Int -> Grid -> T.Text -> IO ()
-flashColor len g clazz = forkIO do
-    children <- #getChildren g
-    forM_ children \x -> do
-        x' <- unsafeCastTo Button x
-        style <- #getStyleContext x'
-        #removeClass style "normal"
-        #addClass style clazz
-    threadDelay len
-    forM_ children \x -> do
-        x' <- unsafeCastTo Button x
-        style <- #getStyleContext x'
-        #removeClass style clazz
-        #addClass style "normal"
-    return ()
-    >> return ()
+newGameBtn :: Builder -> IO ()
+newGameBtn b = do
+    menuBox <- unsafeBuildObj Box b "popup_menu"
+    #show menuBox
 
+--------------------------------------------------------------------------------
+
+-- | Run the app
 main :: IO ()
 main = do
     Gtk.init Nothing
-    win <- buildUI dfltEnv
+    env <- dfltEnv
+    app <- buildApp env
+    let win = window app
+    #setFocus win (Nothing :: Maybe Button)
     #showAll win
+    #setFocus win (Nothing :: Maybe Button)
     Gtk.main
     `catch` (\(e::GError) -> gerrorMessage e >>= putStrLn . T.unpack)

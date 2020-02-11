@@ -1,0 +1,149 @@
+/*
+ * simple styling for gui
+*/
+
+button {
+	background: #1c1c1c;
+	border-radius: 0px;
+	color: #929595;
+    box-shadow: none
+}
+
+button:hover {
+  box-shadow: none;
+  border: 0;
+}
+
+button:hover:not(.evenCell):not(.oddCell) {
+  color: pink;
+}
+
+button.evenCell:focus,
+button.oddCell:focus,
+button.oddCell:hover,
+button.evenCell:hover {
+  color: black;
+  box-shadow: none;
+  border: 2px solid black;
+}
+
+button.evenCell {
+	background: #f5f1b3
+}
+
+button.oddCell {
+	background: #fffdd9
+}
+
+popover {
+	background: transparent;
+	border: 0;
+	box-shadow: none
+}
+
+#container {
+	background: #303030
+}
+
+window-frame {
+	box-shadow: none;
+	margin: 0px
+}
+
+#kpGrid > button:nth-child(1) {
+	border-radius: 10px 0 0 0
+}
+
+#kpGrid > button:nth-child(3) {
+	border-radius: 0 10px 0 0
+}
+
+#kpGrid > button:nth-child(7) {
+	border-radius: 0 0 0 10px
+}
+
+#kpGrid > button:nth-child(9) {
+	border-radius: 0 0 10px 0
+}
+
+#kpGrid > button:nth-child(11) {
+    border-radius: 99px 0 0 99px
+}
+
+#kpGrid > button:nth-child(10) {
+    border-radius: 0
+}
+
+#kpGrid > button:nth-child(12) {
+    border-radius: 0 99px 99px 0
+}
+
+#menuBox {
+	background-color: transparent;
+	padding: 40px;
+	margin: 0;
+}
+
+#startMenu {
+	background-color: mix (#17131f, transparent, 0.4);
+	padding: 0;
+	margin: 0;
+    border: 0; }
+
+
+button.overlayBtn {
+    border-radius: 3px
+}
+
+button.diffMenu:hover,
+button.diffMenu {
+	background: mix (#303030, transparent, 0.4);
+    border: 0;
+    box-shadow: none;
+}
+
+#container.diffMenu:hover,
+#container.diffMenu {
+	background: mix (#303030, transparent, 0.4);
+    border: 0;
+    box-shadow: none;
+}
+
+#container.layoutHelp {
+	background: transparent;
+}
+
+#container.popupMenu {
+	background: transparent;
+}
+
+button.oddCell.selected {
+  color: black;
+  box-shadow: none;
+  border: 2px solid black;
+  background: mix ( mix(#fffdd9, #17131f, 0.03), transparent, 0.03);
+
+}
+
+button.evenCell.selected {
+  color: black;
+  box-shadow: none;
+  border: 2px solid black;
+  background: mix( mix(#f5f1b3, #17131f, 0.1), transparent, 0.1);
+}
+
+button.red.evenCell {
+  background: mix (red, #f5f1b3, 0.4);
+}
+
+button.red.oddCell.red {
+  background: mix (red, #fffdd9, 0.4);
+}
+
+button.green.oddCell {
+  background: mix (#8bff4d, #fffdd9, 0.4);
+}
+
+button.green.evenCell {
+  background: mix (#8bff4d, #f5f1b3, 0.4);
+}

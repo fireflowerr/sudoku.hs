@@ -1,6 +1,4 @@
-{-# LANGUAGE BlockArguments #-}
-
-module Sudoku.Internal where
+module Sudoku.Internal.Internal where
 import Control.Monad
 import Control.Monad.ST
 import Data.Array.IO
@@ -36,3 +34,4 @@ shuffle' xs gen = runST (do
         n = length xs
         newArray' :: Int -> [a] -> ST s (STArray s Int a)
         newArray' n' =  newListArray (1,n')
+
