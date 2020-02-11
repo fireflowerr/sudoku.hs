@@ -1,11 +1,11 @@
 # sudokuhs
-A sudoku solve written in Haskell!
+A sudoku game written in Haskell!
 
 # Screencast
 ![demo](https://i.imgur.com/YhDexXX.gif)
 
 ## About
-This is a simple lightweight sudoku game built with gtk3 using the haskell-gi
+This is a simple sudoku game built with gtk3 using the haskell-gi
 library. Sudokhs does not require any internet connection and is capabe of
 generating, validating, and solving sudoku tables.
 
