@@ -1,7 +1,7 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedLabels    #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE BlockArguments      #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BlockArguments    #-}
 
 -- | This module provides functions for bridging the GUI with the solver
 module Sudoku.Internal.Bridge where

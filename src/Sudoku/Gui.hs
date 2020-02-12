@@ -12,67 +12,71 @@ import Control.Exception (catch)
 import Control.Monad (forM_, when)
 import Data.GI.Base
 import Data.GI.Base.GError (gerrorMessage, GError(..))
+import Data.IORef
 import Data.Maybe (fromJust)
 import GI.Gtk.Enums
 import GI.Gtk.Objects.Box
 import GI.Gtk.Objects.Builder
 import GI.Gtk.Objects.Button
-import GI.Gtk.Objects.Image
 import GI.Gtk.Objects.CssProvider
 import GI.Gtk.Objects.Grid
+import GI.Gtk.Objects.Image
 import GI.Gtk.Objects.Overlay
 import GI.Gtk.Objects.Popover
 import GI.Gtk.Objects.StyleContext
 import GI.Gtk.Objects.Window
 import GI.Pango.Objects.FontMap
 import GI.Pango.Structs.FontDescription
-import Paths_sudoku
+import Paths_sudokuhs
 import Sudoku.Internal.Bindings
 import Sudoku.Internal.Bridge
-import Data.IORef
 import Sudoku.Internal.Sudoku
 import qualified Data.Text as T
 import qualified GI.Gtk.Functions as Gtk (main, init, mainQuit)
 
 -- DEFS ------------------------------------------------------------------------
 
-data Env = Env { lastCell   :: IORef Button
-               , pulse      :: Int }
+data Env = Env { lastCell :: IORef Button
+               , pulse    :: Int
+               , cssPath  :: T.Text
+               , cssPrio  :: Int
+               , uiPath   :: T.Text
+               , fontPath :: T.Text
+               , logoPath :: T.Text }
 
-data App = App { keypad      :: Popover
-               , board       :: Grid
-               , window      :: Window }
+data App = App { keypad :: Popover
+               , board  :: Grid
+               , window :: Window }
 
 data Color = Red | Green -- colors must be supported in CSS
 
 type Font = (FontMap, FontDescription)
 
-cssPath :: T.Text
-cssPath = "ui/gui.css"
-
-uiPath :: T.Text
-uiPath = "ui/app.ui"
-
-fontPath :: T.Text
-fontPath = "ui/sudokuicons.ttf"
-
-logoPath :: T.Text
-logoPath = "ui/sudoku.png"
-
 dfltEnv :: IO Env
 dfltEnv = do
     lc <- newIORef undefined :: IO (IORef Button)
-    return $ Env lc 350000
+    cp <- T.pack <$> getDataFileName "ui/gui.css"
+    up <- T.pack <$> getDataFileName "ui/app.ui"
+    ip <- T.pack <$> getDataFileName "ui/sudokuicons.ttf"
+    lp <- T.pack <$> getDataFileName "ui/sudoku.png"
+    return $ Env
+        { lastCell = lc
+        , pulse    = 350000
+        , cssPath  = cp
+        , cssPrio  = 600 -- css priority
+        , uiPath   = up
+        , fontPath = ip
+        , logoPath = lp }
 
 -- Helper Funcs ----------------------------------------------------------------
 
 -- | Applies app.ui to app window
-applyCss :: Window -> IO ()
-applyCss win = do
+applyCss :: T.Text -> Int -> Window -> IO ()
+applyCss fp p win = do
     screen <- windowGetScreen win
     css <- cssProviderNew
-    cssProviderLoadFromPath css . T.pack =<< getDataFileName (T.unpack cssPath)
-    styleContextAddProviderForScreen screen css 600
+    cssProviderLoadFromPath css fp
+    styleContextAddProviderForScreen screen css (fromIntegral p)
 
 -- | Construct GObject type from builder
 unsafeBuildObj :: (GObject o)
@@ -111,9 +115,9 @@ flashColor pulse' g ps c = traverseTable g ps \x -> do
 -- Build UI --------------------------------------------------------------------
 
 -- | Install Sudoku.ttf to current app isntance
-buildFont :: IO Font
-buildFont = do
-    pass <- currentAppFontAddFile =<< getDataFileName (T.unpack fontPath)
+buildFont :: T.Text -> IO Font
+buildFont fp = do
+    pass <- currentAppFontAddFile fp
     when (not pass) $ error "err adding font file"
     fontMap <- carioFontMapGetDefault
     fdesc <- fontDescriptionFromString "Sudoku"
@@ -153,11 +157,10 @@ buildOverlayLayout g b = do
     difficultyBtns b g
     #show overlay
 
-buildLogo :: Builder -> IO ()
-buildLogo b = do
+buildLogo :: T.Text -> Builder -> IO ()
+buildLogo fp b = do
     logo <- unsafeBuildObj Image b "logo"
-    logoPath' <- getDataFileName $ T.unpack logoPath
-    set logo [#file := T.pack logoPath']
+    set logo [#file := fp]
 
 buildCtrlLayout :: Int -> Grid -> Builder -> IO ()
 buildCtrlLayout pulse' g b = do
@@ -200,16 +203,15 @@ buildWindow b = do
 
 buildApp :: Env -> IO App
 buildApp e = do
-    builder <- builderNewFromFile . T.pack
-        =<< getDataFileName (T.unpack uiPath)
+    builder <- builderNewFromFile (uiPath e)
     board' <- buildBoard (lastCell e) builder
     buildOverlayLayout board' builder
-    buildLogo builder
+    buildLogo (logoPath e) builder
     buildCtrlLayout (pulse e) board' builder
-    buildFont
+    buildFont (fontPath e)
     kp <- buildKeypad (lastCell e) (pulse e) board' builder
     win <- buildWindow builder
-    applyCss win
+    applyCss (cssPath e) (cssPrio e) win
     return $ App kp board' win
 
 -- Button Controls -------------------------------------------------------------

@@ -1,10 +1,10 @@
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE BlockArguments      #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts    #-}
 
 module Sudoku.Internal.Sudoku where
 import Control.Monad (guard, join)
@@ -121,6 +121,7 @@ validateArea (row, col, blk) (Board g) z = null . join $ map f r <> map f c <> m
     r = validate rowIndices row
     c = validate colIndices col
     b = validate blockIndices blk
+
 -- | Find all indices in the grid with a given value
 findIndices :: Int -> Board -> [(Int, Int)]
 findIndices n (Board arr) = map fst . filter (\x -> snd x == n) . assocs $ arr
