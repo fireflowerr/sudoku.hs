@@ -55,10 +55,10 @@ type Font = (FontMap, FontDescription)
 dfltEnv :: IO Env
 dfltEnv = do
     lc <- newIORef undefined :: IO (IORef Button)
-    cp <- T.pack <$> getDataFileName "ui/gui.css"
-    up <- T.pack <$> getDataFileName "ui/app.ui"
-    ip <- T.pack <$> getDataFileName "ui/sudokuicons.ttf"
-    lp <- T.pack <$> getDataFileName "ui/sudoku.png"
+    cp <- T.pack <$> getDataFileName "gui.css"
+    up <- T.pack <$> getDataFileName "app.ui"
+    ip <- T.pack <$> getDataFileName "sudokuicons.ttf"
+    lp <- T.pack <$> getDataFileName "sudoku.png"
     return $ Env
         { lastCell = lc
         , pulse    = 350000

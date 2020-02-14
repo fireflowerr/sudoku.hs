@@ -1,12 +1,12 @@
 /*
  * simple styling for gui
-*/
+ */
 
 button {
-	background: #1c1c1c;
-	border-radius: 0px;
-	color: #929595;
-    box-shadow: none
+  background: #1c1c1c;
+  border-radius: 0px;
+  color: #929595;
+  box-shadow: none
 }
 
 button:hover {
@@ -28,93 +28,97 @@ button.evenCell:hover {
 }
 
 button.evenCell {
-	background: #f5f1b3
+  background: #f5f1b3
 }
 
 button.oddCell {
-	background: #fffdd9
+  background: #fffdd9
 }
 
 popover {
-	background: transparent;
-	border: 0;
-	box-shadow: none
+  background: transparent;
+  border: 0;
+  box-shadow: none
 }
 
 #container {
-	background: #303030
+  background: #303030
 }
 
 window-frame {
-	box-shadow: none;
-	margin: 0px
+  box-shadow: none;
+  margin: 0px
 }
 
 #kpGrid > button:nth-child(1) {
-	border-radius: 10px 0 0 0
+  border-radius: 10px 0 0 0
 }
 
 #kpGrid > button:nth-child(3) {
-	border-radius: 0 10px 0 0
+  border-radius: 0 10px 0 0
 }
 
 #kpGrid > button:nth-child(7) {
-	border-radius: 0 0 0 10px
+  border-radius: 0 0 0 10px
 }
 
 #kpGrid > button:nth-child(9) {
-	border-radius: 0 0 10px 0
+  border-radius: 0 0 10px 0
 }
 
 #kpGrid > button:nth-child(11) {
-    border-radius: 99px 0 0 99px
+  border-radius: 99px 0 0 99px
 }
 
 #kpGrid > button:nth-child(10) {
-    border-radius: 0
+  border-radius: 0
 }
 
 #kpGrid > button:nth-child(12) {
-    border-radius: 0 99px 99px 0
+  border-radius: 0 99px 99px 0
+}
+
+button.sfont {
+  font-family: sudokuicons
 }
 
 #menuBox {
-	background-color: transparent;
-	padding: 40px;
-	margin: 0;
+  background-color: transparent;
+  padding: 40px;
+  margin: 0;
 }
 
 #startMenu {
-	background-color: mix (#17131f, transparent, 0.4);
-	padding: 0;
-	margin: 0;
-    border: 0; }
-
+  background-color: mix (#17131f, transparent, 0.4);
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
 
 button.overlayBtn {
-    border-radius: 3px
+  border-radius: 3px
 }
 
 button.diffMenu:hover,
 button.diffMenu {
-	background: mix (#303030, transparent, 0.4);
-    border: 0;
-    box-shadow: none;
+  background: mix (#303030, transparent, 0.4);
+  border: 0;
+  box-shadow: none;
 }
 
 #container.diffMenu:hover,
 #container.diffMenu {
-	background: mix (#303030, transparent, 0.4);
-    border: 0;
-    box-shadow: none;
+  background: mix (#303030, transparent, 0.4);
+  border: 0;
+  box-shadow: none;
 }
 
 #container.layoutHelp {
-	background: transparent;
+  background: transparent;
 }
 
 #container.popupMenu {
-	background: transparent;
+  background: transparent;
 }
 
 button.oddCell.selected {

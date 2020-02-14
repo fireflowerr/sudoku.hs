@@ -11,10 +11,11 @@ license-file:        LICENSE
 author:              paroxayte
 maintainer:          36929366+paroxayte@users.noreply.github.com
 category:            Game
-data-files:          ui/app.ui
-                   , ui/gui.css
-                   , ui/sudoku.png
-                   , ui/sudokuicons.ttf
+data-dir:            ui
+data-files:          app.ui
+                   , gui.css
+                   , sudoku.png
+                   , sudokuicons.ttf
 
 common deps
   build-depends:       base ^>= 4.12
@@ -32,7 +33,6 @@ common ghc-cfg
   default-language:    Haskell2010
   ghc-options:         -Wall
                        -fno-warn-unused-do-bind
-
 
 library sudoku-internal
   import:              deps, ghc-cfg
