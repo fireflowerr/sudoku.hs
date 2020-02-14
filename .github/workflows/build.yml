@@ -1,0 +1,54 @@
+name: cabal
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    branches:
+      - '*'
+  schedule:
+    - cron: "00 15 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        ghc: ["8.6.5"]
+        cabal: ["3.0"]
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+
+    - name: Cache ~/.cabal/store
+      uses: actions/cache@v1.1.2
+      with:
+        path: ~/.cabal/store
+        key: v1-cabal-store
+
+    - name: Cache dist-newstyle
+      uses: actions/cache@v1.1.2
+      with:
+        path: dist-newstyle
+        key: v1-cabal-dist
+        
+    - name: Install libralies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgirepository1.0-dev libwebkit2gtk-4.0-dev libgtksourceview-3.0-dev
+
+    - name: Install dependencies
+      run: |
+        cabal v2-update
+        cabal v2-configure --disable-optimization --write-ghc-environment-files=always -j2
+        cabal v2-build --only-dependencies
+
+    - name: Build
+      run: |
+        cabal v2-build
+        cabal v2-install all:exes --overwrite-policy=always
