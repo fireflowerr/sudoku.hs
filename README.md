@@ -21,6 +21,8 @@ You can download the appropriate package from the [release](https://github.com/p
 **Arch:** `pacman -U sudokuhs-1-1-x86_64.pkg.tar.xz`
 <BR/>
 **Debian:** `dpkg -i sudokuhs_0.1-0.deb`
+<BR/>
+**MacOS:** *requires [brew](https://brew.sh/):* `brew install gtk+3 fontconfig` -> Double click on the .dmg (downloaded from the release page).
 
 ## Controls
 * (✓) - Highlights all conflicts relative to selected cell
