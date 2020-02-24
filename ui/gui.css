@@ -28,11 +28,14 @@ button.evenCell:hover {
 }
 
 button.evenCell {
-  background: #f5f1b3
+  background: #f5f1b3;
+  border: 2px solid #f5f1b3
+;
 }
 
 button.oddCell {
-  background: #fffdd9
+  background: #fffdd9;
+  border: 2px solid #fffdd9
 }
 
 popover {
