@@ -6,7 +6,7 @@ A sudoku game written in Haskell!
 
 ## About
 This is a simple sudoku game built with gtk3 using the haskell-gi
-library. Sudokhs does not require any internet connection and is capabe of
+library. Sudokhs does not require any internet connection and is capable of
 generating, validating, and solving sudoku tables.
 
 ## Building
